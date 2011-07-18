@@ -1,12 +1,21 @@
-/* Copyright (C) 2003, 2004 DECIS Lab, Delft, The Netherlands and
- * Copyright (C) 2003, 2004 Delft University of Technology
- *                          under the aegis of project COMBINED
+/*
+ * jfreesteel: Serbian eID Viewer Library (GNU LGPLv3)
+ * Copyright (C) 2011 Goran Rakic
  *
- * This file is released under the Combined License. Please see the
- * appropriate licensing document about the exact terms of the license.
+ * This is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License version
+ * 3.0 as published by the Free Software Foundation.
  *
- * Created on Jul 17, 2011 by Filip Miletić <f.miletic@ewi.tudelft.nl>
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this software; if not, see
+ * http://www.gnu.org/licenses/.
  */
+
 package net.devbase.jfreesteel;
 
 import net.devbase.jfreesteel.EidInfo.Builder;
