@@ -132,7 +132,7 @@ public class EidInfoTest extends EidTestCase {
             .addValue(Tag.STATE, "SRB");
         assertEquals("Street 55L/1212\n" +
                 "Place, Community\n" +
-                "REPUBLIKA SR BIJA", builder.build().getPlaceFull(null, null, null));
+                "REPUBLIKA SRBIJA", builder.build().getPlaceFull(null, null, null));
     }
 
     public void testGetPlaceFull_formatted() {
