@@ -18,48 +18,170 @@
 
 package net.devbase.jfreesteel;
 
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.google.common.base.Charsets;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 
 /**
  * Simple class to hold and reformat data read from eID
- * 
- * @author Nikolic Aleksandar (nikolic.alek@gmail.com)
+ *
+ * @author nikolic.alek@gmail.com (Aleksandar Nikolic)
  */
 public class EidInfo {
 
-    private final static Logger logger = LoggerFactory.getLogger(EidInfo.class);
-    
-    private String docRegNo = "";
-    private String issuingDate = "";
-    private String expiryDate = "";
-    private String issuingAuthority = "";
-    
-    private String personalNumber = "";
-    private String surname = "";
-    private String givenName = "";
-    private String parentGivenName = "";
-    private String sex = "";
-    private String placeOfBirth = "";
-    private String communityOfBirth = "";
-    private String stateOfBirth = "";
-    private String dateOfBirth = "";
-    
-    private String state = "";
-    private String community = "";
-    private String place = "";
-    private String street = "";
-    private String houseNumber = "";
-    private String houseLetter = "";
-    private String entrance = "";
-    private String floor = "";
-    private String appartmentNumber = "";
-    
-    public EidInfo() {
+    private static final Map<Integer, Tag> enumsByTag = Maps.newHashMap();
 
+    /** EID information codes. */
+    public enum Tag {
+        /** Country code. */
+        SRB(1545),
+        /** Registered document number. */
+        DOC_REG_NO(1546),
+        ID(1547),  // ?
+        /** The unique document ID of this document. */
+        ID_DOC_REG_NO(1548),
+        /** The issuing date, e.g. 01.01.2011. */
+        ISSUING_DATE(1549),
+        /** The date that the ID expires */
+        EXPIRY_DATE(1550),
+        /** The authoritu, e.g. "Ministry of the Interior". */
+        ISSUING_AUTHORITY(1551),
+        /** The person's unique identifier number.
+         *
+         * While mostly unique, due to the non-bulletproof number allocation scheme, has actually
+         * been known to repeat for some rare individuals.
+         */
+        PERSONAL_NUMBER(1558, new ValidatePersonalNumber()),
+        /** Person's last name, e.g. "Smith" for some John Smith */
+        SURNAME(1559),
+        /** The given name, e.g. "John" for some John Smith. */
+        GIVEN_NAME(1560),
+        /**
+         * The parent's given name, the usual 'parenthood' middle name used to disambiguate
+         * similarly named persons.
+         * <p>
+         * E.g. "Wiley" for some John Wiley Smith.
+         */
+        PARENT_GIVEN_NAME(1561),
+        /** The gender of the person. */
+        SEX(1562),
+        /** The plae the person was born in, e.g. "Belgrade" */
+        PLACE_OF_BIRTH(1563),
+        /** ? */
+        COMMUNITY_OF_BIRTH(1564),
+        STATE_OF_BIRTH(1565),
+        DATE_OF_BIRTH(1566),
+        STATE_OF_BIRTH_CODE(1567),  // ?
+        STATE(1568),
+        COMMUNITY(1569),
+        PLACE(1570),
+        STREET(1571),
+        HOUSE_NUMBER(1572),
+        // TODO(nikolic.alek): What about tags 1573 .. 1577_
+        HOUSE_LETTER(1573),  // ?
+        ENTRANCE(1576),  // ?
+        FLOOR(1577),  // ?
+        APPARTMENT_NUMBER(1578);
+
+        private final int value;
+        private final Predicate<String> validator;
+        /** Initializes a tag with the corresponding raw encoding value */
+        Tag(int value) {
+            this(value, Predicates.<String>alwaysTrue());
+        }
+        /**
+         * Initializes a tag with the corresponding raw encoding value, and a
+         * validator.
+         * <p>
+         * The validator is invoked to check whether the given raw value parsees into
+         * a sensible value for the field.
+         */
+        Tag(int value, Predicate<String> validator) {
+            this.value = value;
+            this.validator = validator;
+            enumsByTag.put(value, this);
+        }
+        /** Gets the numeric tag corresponding to this enum. */
+        public int get() {
+            return value;
+        }
+        /** Runs a validator for this tag on the supplied value.
+         *
+         * @return true if the value is valid; false otherwise.
+         */
+        public boolean validate(String value) {
+            return validator.apply(value);
+        }
+    }
+
+    private Map<Tag, String> knownValues;
+    private Map<Integer, byte[]> unknownValues;
+
+    /** Builds an instance of EID info. */
+    public static class Builder {
+        ImmutableMap.Builder<Tag, String> builder;
+        ImmutableMap.Builder<Integer, byte[]> unknownBuilder;
+
+        public Builder() {
+            builder = ImmutableMap.builder();
+            unknownBuilder = ImmutableMap.builder();
+        }
+
+        /**
+         * Adds the raw byte value to the information builder.
+         *
+         *  @throws IllegalArgumentException if the raw value supplied fails validation, or if
+         *      the same tag is added twice.
+         */
+        public Builder addRawValue(int rawTag, byte[] rawValue) {
+            Tag tag = enumsByTag.get(rawTag);
+            if (tag != null) {
+                String value = Utils.bytes2UTF8String(rawValue);
+                Preconditions.checkArgument(
+                    tag.validate(value),
+                    String.format("Value '%s' not valid for tag '%s'", value, tag));
+                builder.put(tag, value);
+            } else {
+                unknownBuilder.put(rawTag, rawValue);
+            }
+            return this;
+        }
+
+        /**
+         * Adds the value to the information builder.
+         *
+         *  @throws IllegalArgumentException if the raw value supplied fails validation, or if
+         *      the same tag is added twice.
+         */
+        public Builder addValue(Tag tag, String value) {
+            return addRawValue(tag.get(), value.getBytes(Charsets.UTF_8));
+        }
+
+        public EidInfo build() {
+            return new EidInfo(builder.build(), unknownBuilder.build());
+        }
+    }
+
+    private EidInfo(Map<Tag, String> knownFields, Map<Integer, byte[]> unknownFields) {
+        this.knownValues = knownFields;
+        this.unknownValues = unknownFields;
+    }
+
+    /** Returns the value associated with the supplied tag. */
+    public String get(Tag tag) {
+        return knownValues.get(tag);
+    }
+
+    private boolean has(Tag tag) {
+        return !Strings.isNullOrEmpty(get(tag));
     }
 
     /**
@@ -68,87 +190,82 @@ public class EidInfo {
      * @return Nicely formatted full name
      */
     public String getNameFull() {
-        return givenName + " " + parentGivenName + " " + surname;
+        return String.format(
+            "%s %s %s", get(Tag.GIVEN_NAME), get(Tag.PARENT_GIVEN_NAME), get(Tag.SURNAME));
+    }
+
+    private void appendTo(StringBuilder builder, Tag tag, String separator) {
+        if (has(tag)) {
+            builder.append(String.format("%s%s", separator, get(tag)));
+        }
+    }
+
+    private void appendTo(StringBuilder builder, String format, Tag tag, String separator) {
+        if (has(tag)) {
+            builder.append(separator);
+            builder.append(String.format(format, get(tag)));
+        }
+    }
+
+    private void appendTo(StringBuilder builder, Tag tag) {
+        appendTo(builder, tag, "");
+    }
+
+    private String sanitizeFormat(String format) {
+        return (format != null && format.contains("%s"))
+            ? format
+            : "%s";
     }
 
     /**
      * Get place of residence as multiline string. Format paramters can be used to provide better
      * output or null/empty strings can be passed for no special formating.
-     * 
+     *
      * For example if floorLabelFormat is "%s. sprat" returned string will contain "5. sprat" for
      * floor number 5.
-     * 
+     *
      * Recommended values for Serbian are "ulaz %s", "%s. sprat" and "br. %s"
-     * 
+     *
      * @param entranceLabelFormat String to format entrance label or null
      * @param floorLabelFormat String to format floor label or null
      * @param appartmentLabelFormat String to format appartment label or null
      * @return Nicely formatted place of residence as multiline string
      */
-    public String getPlaceFull(String entranceLabelFormat, String floorLabelFormat, String appartmentLabelFormat) {
+    public String getPlaceFull(
+            String entranceLabelFormat, String floorLabelFormat, String appartmentLabelFormat) {
         StringBuilder out = new StringBuilder();
 
-        if (entranceLabelFormat == null || entranceLabelFormat.isEmpty()) {
-            entranceLabelFormat = "%s";
-        }
-        if (floorLabelFormat == null || floorLabelFormat.isEmpty()) {
-            floorLabelFormat = "%s";
-        }
-        if (appartmentLabelFormat == null || appartmentLabelFormat.isEmpty()) {
-            appartmentLabelFormat = "%s";
-        }
-        
-        if (!street.isEmpty()) {
-            // Neka ulica
-            out.append(street);                   
-        }
-        if (!houseNumber.isEmpty()) {
-            // Neka ulica 11
-            out.append(" ");
-            out.append(houseNumber);
-        }
-        if (!houseLetter.isEmpty()) {
-            // Neka ulica 11A
-            out.append(houseLetter);
-        }
-        
+        entranceLabelFormat = sanitizeFormat(entranceLabelFormat);
+        floorLabelFormat = sanitizeFormat(floorLabelFormat);
+        appartmentLabelFormat = sanitizeFormat(appartmentLabelFormat);
+
+        appendTo(out, Tag.STREET);
+        appendTo(out, Tag.HOUSE_NUMBER, " ");
+        appendTo(out, Tag.HOUSE_LETTER);
         // For entranceLabel = "ulaz %s" gives "Neka ulica 11A ulaz 2"
-        if (!entrance.isEmpty()) {
-            out.append(" ");
-            out.append(String.format(entranceLabelFormat, entrance));
-        }
+        appendTo(out, entranceLabelFormat, Tag.ENTRANCE, " ");
 
         // For floorLabel = "%s. sprat" gives "Neka ulica 11 ulaz 2, 5. sprat"
-        if (!floor.isEmpty()) {
-            out.append(", ");
-            out.append(String.format(floorLabelFormat, floor));
-        }
+        appendTo(out, floorLabelFormat, Tag.FLOOR, ", ");
 
-        if (!appartmentNumber.isEmpty()) {
+        if (has(Tag.APPARTMENT_NUMBER)) {
             // For appartmentLabel "br. %s" gives "Neka ulica 11 ulaz 2, 5. sprat, br. 4"
-            if (!entrance.isEmpty() || !floor.isEmpty()) {
-                out.append(", " + String.format(appartmentLabelFormat, appartmentNumber));
+            if (has(Tag.ENTRANCE) || has(Tag.FLOOR)) {
+                out.append(", " + String.format(appartmentLabelFormat, get(Tag.APPARTMENT_NUMBER)));
             } else {
                 // short form: Neka ulica 11A/4
-                out.append("/" + appartmentNumber);
+                out.append("/" + get(Tag.APPARTMENT_NUMBER));
             }
         }
 
-        out.append("\n");
-        out.append(place);
-        if (!community.isEmpty()) {
-            out.append(", ");
-            out.append(community);
-        }
+        appendTo(out, Tag.PLACE, "\n");
+        appendTo(out, Tag.COMMUNITY, ", ");
 
         out.append("\n");
-        if (state.contentEquals("SRB")) {
-            // small cheat for better output
-            out.append("REPUBLIKA SRBIJA");
-        } else {
-            out.append(state);
-        }
-        
+        String rawState = get(Tag.STATE);
+        out.append("SRB".equals(rawState)
+            ? "REPUBLIKA SRBIJA"
+            : rawState);
         return out.toString();
     }
 
@@ -159,167 +276,32 @@ public class EidInfo {
      */
     public String getPlaceOfBirthFull()
     {
-        String out = new String(placeOfBirth);
+        StringBuilder out = new StringBuilder();
 
-        if (!communityOfBirth.isEmpty()) {
-            out += ", " + communityOfBirth;
-        }
-        if (!stateOfBirth.isEmpty()) {
-            out += "\n" + stateOfBirth;
-        }
-        
-        return out;
+        appendTo(out, Tag.PLACE_OF_BIRTH);
+        appendTo(out, Tag.COMMUNITY_OF_BIRTH, ", ");
+        appendTo(out, Tag.STATE_OF_BIRTH, "\n");
+        return out.toString();
     }
-    
-    public String getDocRegNo() {
-        return docRegNo;
-    }
-    public void setDocRegNo(String docRegNo) {
-        this.docRegNo = docRegNo;
-    }
-    public String getIssuingDate() {
-        return issuingDate;
-    }
-    public void setIssuingDate(String issuingDate) {
-        this.issuingDate = issuingDate;
-    }
-    public String getExpiryDate() {
-        return expiryDate;
-    }
-    public void setExpiryDate(String expiryDate) {
-        this.expiryDate = expiryDate;
-    }
-    public String getIssuingAuthority() {
-        return issuingAuthority;
-    }
-    public void setIssuingAuthority(String issuingAuthority) {
-        this.issuingAuthority = issuingAuthority;
-    }
-    public String getPersonalNumber() {
-        return personalNumber;
-    }
-    public void setPersonalNumber(String personalNumber) throws Exception
-    {
-        // there are valid personal numbers with invalid checksum, check for format only
-        Pattern pattern = Pattern.compile("^[0-9]{13}$", Pattern.CASE_INSENSITIVE);  
-        Matcher matcher = pattern.matcher(personalNumber);  
-        if (matcher.matches()) {  
-            this.personalNumber = personalNumber;
-        } else {
-            throw new Exception("Invalid personal number.");
-        }
-    }
-    public String getSurname() {
-        return surname;
-    }
-    public void setSurname(String surname) {
-        this.surname = surname;
-    }
-    public String getGivenName() {
-        return givenName;
-    }
-    public void setGivenName(String givenName) {
-        this.givenName = givenName;
-    }
-    public String getParentGivenName() {
-        return parentGivenName;
-    }
-    public void setParentGivenName(String parentGivenName) {
-        this.parentGivenName = parentGivenName;
-    }
-    public String getSex() {
-        return sex;
-    }
-    public void setSex(String sex) {
-        this.sex = sex;
-    }
-    public String getPlaceOfBirth() {
-        return placeOfBirth;
-    }
-    public void setPlaceOfBirth(String placeOfBirth) {
-        this.placeOfBirth = placeOfBirth;
-    }
-    public String getCommunityOfBirth() {
-        return communityOfBirth;
-    }
-    public void setCommunityOfBirth(String communityOfBirth) {
-        this.communityOfBirth = communityOfBirth;
-    }
-    public String getStateOfBirth() {
-        return stateOfBirth;
-    }
-    public void setStateOfBirth(String stateOfBirth) {
-        this.stateOfBirth = stateOfBirth;
-    }
-    public String getDateOfBirth() {
-        return dateOfBirth;
-    }
-    public void setDateOfBirth(String dateOfBirth) {
-        this.dateOfBirth = dateOfBirth;
-    }
-    public String getState() {
-        return state;
-    }
-    public void setState(String state) {
-        this.state = state;
-    }
-    public String getCommunity() {
-        return community;
-    }
-    public void setCommunity(String community) {
-        this.community = community;
-    }
-    public String getPlace() {
-        return place;
-    }
-    public void setPlace(String place) {
-        this.place = place;
-    }
-    public String getStreet() {
-        return street;
-    }
-    public void setStreet(String street) {
-        this.street = street;
-    }
-    public String getHouseNumber() {
-        return houseNumber;
-    }
-    public void setHouseNumber(String houseNumber) {
-        this.houseNumber = houseNumber;
-    }
-    public String getHouseLetter() {
-        return houseLetter;
-    }
-    public void setHouseLetter(String houseLetter) {
-        this.houseLetter = houseLetter;
-    }
-    public String getEntrance() {
-        return entrance;
-    }
-    public void setEntrance(String entrance) {
-        this.entrance = entrance;
-    }
-    public String getFloor() {
-        return floor;
-    }
-    public void setFloor(String floor) {
-        this.floor = floor;
-    }
-    public String getAppartmentNumber() {
-        return appartmentNumber;
-    }
-    public void setAppartmentNumber(String appartmentNumber) {
-        this.appartmentNumber = appartmentNumber;
-    }
-    
-    // For debug
+
     @Override
     public String toString() {
-        return  givenName + " " + parentGivenName + " " + surname + "(" + personalNumber + "/" +
-                sex + ")\n" + docRegNo  + " " + issuingDate + "-" + expiryDate + ", " + 
-                issuingAuthority + "\n" + state + ", " + place + ", " + community + ", " + street +
-                " " + houseNumber + houseLetter + " " + entrance + " " + floor + " " +
-                appartmentNumber + "\n" + dateOfBirth + ", " + placeOfBirth + ", " + 
-                communityOfBirth + " " + stateOfBirth + "\n";
+        return String.format("%s\n%s\n",
+            knownValues,
+            Utils.map2UTF8String(unknownValues));
+    }
+
+    /**
+     * Checks whether the personal ID number is a valid number.
+     * <p>
+     * Currently only the format is checked, but not the checksum.
+     */
+    private static class ValidatePersonalNumber implements Predicate<String> {
+        public boolean apply(String personalNumber) {
+            // there are valid personal numbers with invalid checksum, check for format only
+            Pattern pattern = Pattern.compile("^[0-9]{13}$", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(personalNumber);
+            return matcher.matches();
+        }
     }
 }

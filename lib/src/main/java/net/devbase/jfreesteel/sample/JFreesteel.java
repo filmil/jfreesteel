@@ -27,18 +27,19 @@ import javax.smartcardio.TerminalFactory;
 
 import net.devbase.jfreesteel.EidCard;
 import net.devbase.jfreesteel.EidInfo;
+import net.devbase.jfreesteel.EidInfo.Tag;
 import net.devbase.jfreesteel.Utils;
 
 /**
  * This is just a simple demonstration how one can use jfreesteel library
  * to include eID viewer support into other applications. Reader interface
  * was not used, instead a direct connection to the Card is made.
- * 
- * See the jFreesteelGUI for the example how to use the Reader interface. 
+ *
+ * See the jFreesteelGUI for the example how to use the Reader interface.
  * Please note that the JFreesteelGUI is released under GNU Affero GPLv3
  * license, while this class and the rest of the jfreesteel library is
  * released under the more permissive GNU Lesser GPL license version 3.
- * 
+ *
  * @author Goran Rakic (grakic@devbase.net)
  */
 @SuppressWarnings("restriction") // Various javax.smartcardio.*
@@ -48,8 +49,8 @@ public class JFreesteel {
         if (terminals.size() > 1) {
             System.out.println("Available readers:\n");
             int c = 1;
-            for (Object t:terminals.toArray()) {
-                System.out.format("%d) %s\n", c++, t);
+            for (CardTerminal terminal : terminals) {
+                System.out.format("%d) %s\n", c++, terminal);
             }
 
             Scanner in = new Scanner(System.in);
@@ -66,10 +67,10 @@ public class JFreesteel {
             return terminals.get(0);
         }
     }
-        
+
     public static void main(String[] args) {
         CardTerminal terminal = null;
-        
+
         // get the terminal
         try {
             TerminalFactory factory = TerminalFactory.getDefault();
@@ -79,41 +80,39 @@ public class JFreesteel {
         } catch (CardException e) {
             System.err.println("Missing card reader.");
         }
-        
+
         try {
             // establish a connection with the card
             Card card = terminal.connect("*");
 
             // read eid data
             EidCard eidcard = new EidCard(card);
-            EidInfo info = null;
 
-            try {
-                info = eidcard.readEidInfo();
-            } catch (Exception e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-                System.exit(0);
-            }
+            EidInfo info = eidcard.readEidInfo();
 
-            System.out.format("ATR            : %s\n", Utils.bytes2HexString(card.getATR().getBytes()));
-            System.out.format("eID number     : %s\n", info.getDocRegNo());
-            System.out.format("Issued         : %s\n", info.getIssuingDate());
-            System.out.format("Valid          : %s\n", info.getExpiryDate());
-            System.out.format("Issuer         : %s\n", info.getIssuingAuthority());
-            System.out.format("JMBG           : %s\n", info.getPersonalNumber());
-            System.out.format("Family name    : %s\n", info.getSurname());
-            System.out.format("First name     : %s\n", info.getGivenName());
-            System.out.format("Middle name    : %s\n", info.getParentGivenName());
-            System.out.format("Gender         : %s\n", info.getSex());
-            System.out.format("Place od birth : %s\n", info.getPlaceOfBirthFull().replace("\n", ", "));
-            System.out.format("Date of birth  : %s\n", info.getDateOfBirth());
-            System.out.format("Street address : %s, %s\n", info.getStreet(), info.getHouseNumber());
-            System.out.format("City           : %s, %s, %s\n", info.getCommunity(), info.getPlace(), info.getState());
-
+            System.out.format(
+                "ATR            : %s\n", Utils.bytes2HexString(card.getATR().getBytes()));
+            System.out.format("eID number     : %s\n", info.get(Tag.DOC_REG_NO));
+            System.out.format("Issued         : %s\n", info.get(Tag.ISSUING_DATE));
+            System.out.format("Valid          : %s\n", info.get(Tag.EXPIRY_DATE));
+            System.out.format("Issuer         : %s\n", info.get(Tag.ISSUING_AUTHORITY));
+            System.out.format("JMBG           : %s\n", info.get(Tag.PERSONAL_NUMBER));
+            System.out.format("Family name    : %s\n", info.get(Tag.SURNAME));
+            System.out.format("First name     : %s\n", info.get(Tag.GIVEN_NAME));
+            System.out.format("Middle name    : %s\n", info.get(Tag.PARENT_GIVEN_NAME));
+            System.out.format("Gender         : %s\n", info.get(Tag.SEX));
+            System.out.format(
+                "Place od birth : %s\n", info.getPlaceOfBirthFull().replace("\n", ", "));
+            System.out.format("Date of birth  : %s\n", info.get(Tag.DATE_OF_BIRTH));
+            System.out.format(
+                "Street address : %s, %s\n", info.get(Tag.STREET), info.get(Tag.HOUSE_NUMBER));
+            System.out.format(
+                "City           : %s, %s, %s\n",
+                    info.get(Tag.COMMUNITY),
+                    info.get(Tag.PLACE),
+                    info.get(Tag.STATE));
         } catch (CardException e) {
             e.printStackTrace();
         }
     }
-
 }
