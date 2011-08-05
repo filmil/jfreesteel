@@ -10,8 +10,6 @@
     <name>Serbian eID Applet Demo</name>
     <description>Applet demo using the JFreesteel library</description>
     <build>
-        <directory>../target/${artifactId}</directory>
-        <finalName>../${artifactId}-${version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

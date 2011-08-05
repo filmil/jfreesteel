@@ -10,8 +10,6 @@
     <name>Serbian eID Viewer Application</name>
     <description>GUI application using the JFreesteel library</description>
     <build>
-        <directory>../target/${project.artifactId}</directory>
-        <finalName>../${project.artifactId}-${project.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -36,12 +34,6 @@
                             <goal>copy-dependencies</goal>
                         </goals>
                         <configuration>
-                            <!--
-                            If the jfreesteel.jar is excluded, it will not be available
-                            in the serbianediviewer-lib/ classpath
-                            <excludeArtifactIds>jfreesteel</excludeArtifactIds>
-                            -->
-                            <outputDirectory>../target/${project.artifactId}-lib</outputDirectory>
                         </configuration>
                     </execution>
                 </executions>
