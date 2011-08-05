@@ -23,6 +23,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -40,14 +41,15 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Maps;
 
 /**
+ * Smart card wrapper.
+ * <p>
  * EidCard is a wrapper providing an interface for reading data
  * from the Serbian eID card. Public read*() methods allow you to
  * get specific data about card holder and certificates stored on
  * the card.
- * 
+ * <p>
  * It is not advised to initialize this class directly. Instead you
  * should initialize Reader class and assign the listener for the
  * card insertion/removal events. The listener will receive EidCard
@@ -61,7 +63,7 @@ public class EidCard {
     private final static Logger logger = LoggerFactory.getLogger(EidCard.class);
 
     /** The list of known EID attributes, used to identify smartcards. */
-    private static final Iterable<byte[]> KNOWN_EID_ATTRIBUTES = ImmutableList.of(
+    @VisibleForTesting static final Iterable<byte[]> KNOWN_EID_ATTRIBUTES = ImmutableList.of(
         // Add more as more become available.
         Utils.asByteArray(
             0x3B, 0xB9, 0x18, 0x00, 0x81, 0x31, 0xFE, 0x9E, 
@@ -91,7 +93,7 @@ public class EidCard {
     
     public EidCard(Card card) 
         throws IllegalArgumentException, SecurityException, IllegalStateException {
-        final byte[] atrBytes = card.getATR().getBytes();
+        byte[] atrBytes = card.getATR().getBytes();
         Preconditions.checkArgument(
             isKnownAtr(atrBytes), 
             String.format("EidCard: Card is not recognized as Serbian eID. Card ATR: %s", 
@@ -114,8 +116,8 @@ public class EidCard {
      * <p>
      * Encoding sequence is a repeated sequence of the following.
      * <ol>
-     *   <li>The tag, encoded as little-endian 16-bit number
-     *   <li>The length of data, in bytes, as little-endian 16-bit number
+     *   <li>The tag, encoded as little-endian unsigned 16-bit number (same as Java char)
+     *   <li>The length of data, in bytes, as unsigned little-endian 16-bit number
      *   <li>The data bytes, as many as determined by length.
      * </ol> 
      * [tag 16bit LE] [len 16bit LE] [len bytes of data] | [fld] [06] ...
@@ -125,21 +127,14 @@ public class EidCard {
     @VisibleForTesting 
     static Map<Integer, byte[]> parseTlv(byte[] bufferArray) {
         ImmutableMap.Builder<Integer, byte[]> builder = ImmutableMap.builder();
-        
-        int i = 0;
-        while (i + 3 < bufferArray.length) {
-            int length = ((0xFF & bufferArray[i + 3]) << 8) + (0xFF & bufferArray[i + 2]);
-            int tag = ((0xFF & bufferArray[i + 1]) << 8) + (0xFF & bufferArray[i + 0]);
-            
-            // is there a new tag?
-            if (length >= bufferArray.length) {
-                break;
-            }
-            builder.put(tag, Arrays.copyOfRange(bufferArray, i + 4, i + 4 + length));
-
-            i += 4 + length;
+        ByteBuffer buffer = ByteBuffer.wrap(bufferArray).order(ByteOrder.LITTLE_ENDIAN);
+        while (buffer.remaining() > 4) {
+            char tag = buffer.getChar();
+            char length = buffer.getChar();
+            byte[] range = new byte[length];
+            buffer.get(range);
+            builder.put((int) tag, range);
         }
-        
         return builder.build();
     }
 
@@ -226,7 +221,7 @@ public class EidCard {
         }
     }
     
-    public EidInfo readEidInfo() throws CardException, Exception {
+    public EidInfo readEidInfo() throws CardException {
         try {
             logger.info("exclusive");
             card.beginExclusive();

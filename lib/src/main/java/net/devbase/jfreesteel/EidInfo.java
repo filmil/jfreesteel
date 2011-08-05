@@ -198,7 +198,7 @@ public class EidInfo {
     public String getPersonalNumber() {
         return personalNumber;
     }
-    public void setPersonalNumber(String personalNumber) throws Exception
+    public void setPersonalNumber(String personalNumber)
     {
         // there are valid personal numbers with invalid checksum, check for format only
         Pattern pattern = Pattern.compile("^[0-9]{13}$", Pattern.CASE_INSENSITIVE);  
@@ -206,7 +206,7 @@ public class EidInfo {
         if (matcher.matches()) {  
             this.personalNumber = personalNumber;
         } else {
-            throw new Exception("Invalid personal number.");
+            throw new RuntimeException("Invalid personal number.");
         }
     }
     public String getSurname() {
