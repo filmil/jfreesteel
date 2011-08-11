@@ -10,8 +10,6 @@
     <name>JFreesteel Library</name>
     <description>Serbian eID Viewer Java Library</description>
     <build>
-        <directory>../target/${artifactId}</directory>
-        <finalName>../${artifactId}-${version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
